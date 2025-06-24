@@ -1,42 +1,28 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message
-from pytgcalls import PyTgCalls
-from pytgcalls.types.input_stream import InputAudioStream
-from pytgcalls.types.stream import StreamAudioEnded
-import config
+from config import BOT_TOKEN, API_ID, API_HASH
+from player import user, call, start_call
+from helpers import download_audio
+import asyncio
 
-app = Client("musicbot", api_id=config.API_ID, api_hash=config.API_HASH, bot_token=config.BOT_TOKEN)
-pytg = PyTgCalls(app)
+bot = Client("musicbot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# بدء التشغيل
-@pytg.on_stream_end()
-async def stream_end_handler(_, update: StreamAudioEnded):
-    await pytg.leave_group_call(update.chat_id)
+@bot.on_message(filters.command("start"))
+async def start(client, message):
+    await message.reply("🎶 أهلاً بك! أرسل اسم أغنية أو رابط يوتيوب للتشغيل.")
 
-@app.on_message(filters.command("تشغيل") & filters.user(config.OWNER_ID))
-async def play(_, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("🎵 ارسل اسم الملف الصوتي بعد الأمر")
-    audio_file = message.command[1] + ".mp3"
-    try:
-        await pytg.join_group_call(
-            message.chat.id,
-            InputAudioStream(audio_file),
-        )
-        await message.reply(f"✅ تم تشغيل: {audio_file}")
-    except Exception as e:
-        await message.reply(f"❌ خطأ: {e}")
+@bot.on_message(filters.text & filters.group)
+async def play(client, message):
+    query = message.text
+    await message.reply("🔍 يتم التحميل من يوتيوب...")
+    url = f"ytsearch:{query}"
+    path = download_audio(url)
+    await start_call(message.chat.id, path)
+    await message.reply("✅ تم التشغيل في المكالمة.")
 
-@app.on_message(filters.command("ايقاف") & filters.user(config.OWNER_ID))
-async def stop(_, message: Message):
-    await pytg.leave_group_call(message.chat.id)
-    await message.reply("🛑 تم ايقاف التشغيل.")
+async def main():
+    await user.start()
+    await call.start()
+    await bot.start()
+    print("🚀 البوت يعمل الآن...")
 
-@app.on_message(filters.command("بدء") & filters.user(config.OWNER_ID))
-async def start(_, message):
-    await message.reply("🎧 البوت جاهز لتشغيل الصوت في المكالمات!")
-
-app.start()
-pytg.start()
-print("Bot is running...")
-app.idle()
+asyncio.run(main())
